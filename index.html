@@ -399,7 +399,11 @@ function enterGame() {
   startRealtimeLeaderboard();
 }
 
-function leaveSession() {
+async function leaveSession() {
+  // Remove this player from Firebase so they vanish from the leaderboard
+  if (sessionCode && myPlayerId) {
+    try { await db.ref('players/' + sessionCode + '/' + myPlayerId).remove(); } catch(e) {}
+  }
   stopRealtimeLeaderboard();
   sessionCode = myPlayerId = '';
   board = []; marked = new Set(); winShown = false;
@@ -538,6 +542,24 @@ document.getElementById('joinCodeInput').addEventListener('keydown', e => {
 document.getElementById('joinCodeInput').addEventListener('input', e => {
   e.target.value = e.target.value.toUpperCase();
 });
+
+// ── CLEANUP ON TAB CLOSE ──
+// If someone closes the tab without clicking "Leave," remove them from Firebase.
+// We use onDisconnect() which tells Firebase: "if my connection drops, run this
+// delete automatically on the server side." This is reliable even if the browser
+// kills the page before our JS can run.
+function registerDisconnectCleanup() {
+  if (sessionCode && myPlayerId) {
+    db.ref('players/' + sessionCode + '/' + myPlayerId).onDisconnect().remove();
+  }
+}
+
+// Re-register disconnect cleanup after every save (since saves overwrite the node)
+const _origSaveMyProgress = saveMyProgress;
+saveMyProgress = async function() {
+  await _origSaveMyProgress();
+  registerDisconnectCleanup();
+};
 </script>
 </body>
 </html>
